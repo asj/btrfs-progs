@@ -179,3 +179,187 @@ again:
 
 	return 0;
 }
+
+static void generate_fscrypt_policy(const char *type,
+			void *keytag, void *policy, size_t *plen)
+{
+	/*
+	 * Right, its using the fscrypt context not the policy.
+	 * The stuff that go at xattr should be rw by userland.
+	 * Open to use policy and ioctl, if provided good reason
+	 * for not to use xattr set/get.
+	 */
+	struct fscrypt_context *p = policy;
+
+	*plen = sizeof(struct fscrypt_context);
+
+	p->format = FS_ENCRYPTION_CONTEXT_FORMAT_V1;
+	p->contents_encryption_mode = FS_ENCRYPTION_MODE_AES_256_XTS;
+	p->filenames_encryption_mode = FS_ENCRYPTION_MODE_AES_256_CTS;
+	p->flags = 0;
+	memcpy(p->master_key_descriptor, keytag,
+				FS_KEY_DESCRIPTOR_SIZE);
+	memset(p->nonce, 0, FS_KEY_DERIVATION_NONCE_SIZE);
+}
+
+
+
+int is_encryption_type_supported(const char *type)
+{
+	FILE *f;
+	char tmp[512];
+	char *tmp_type;
+	int klen = 15;
+	const char *known_str = "name         : ";
+
+	if (!strcmp(type, "fscryptv1"))
+		return 1;
+
+	tmp_type = strdup(type);
+
+	if ((f = fopen("/proc/crypto", "r")) == NULL) {
+		error("Failed to open '/proc/crypto': %s\n",
+				strerror(errno));
+		kfree(tmp_type);
+		return -errno;
+	}
+
+	while (fgets(tmp, sizeof(tmp), f) != NULL) {
+		if (!strncmp(known_str, tmp, klen)) {
+			if (!strncmp(tmp+klen, tmp_type, strlen(tmp_type) )) {
+				kfree(tmp_type);
+				return 1;
+			}
+		}
+	}
+
+	kfree(tmp_type);
+	return 0;
+}
+
+void print_encrypt_context(struct fscrypt_context *ctx, size_t size)
+{
+	int x;
+	printf("fscrypt: %x %x %x\n",
+		ctx->contents_encryption_mode,
+		ctx->filenames_encryption_mode, ctx->flags);
+	printf("mk_desc:");
+	for (x = 0; x < FS_KEY_DESCRIPTOR_SIZE; x++)
+		printf("%02x", ctx->master_key_descriptor[x]);
+	printf("\n");
+	printf("nonce:");
+	for (x = 0; x < FS_KEY_DERIVATION_NONCE_SIZE; x++)
+		printf("%02x", ctx->nonce[x]);
+	printf("\n");
+}
+
+static int handle_prop_encrypt(enum prop_object_type type, const char *object,
+			const char *name, const char *etype, char *value_out)
+{
+	int ret;
+	ssize_t sret;
+	int fd = -1;
+	DIR *dirstream = NULL;
+	char *xattr_name = NULL;
+	int open_flags = type ? O_RDWR : O_RDONLY;
+	char attr_keytag[FS_KEY_DESCRIPTOR_SIZE + 1] = {0};
+	char *subvol_object = strdup(object);
+	key_serial_t keyserial;
+	u8 policy[256] = {0};
+	size_t policy_len;
+	size_t val_sz = sizeof(struct fscrypt_context);
+	u8 *val = NULL;
+	struct fscrypt_context *ctx_org = NULL;
+	struct fscrypt_context *ctx = NULL;
+
+	ret = 0;
+	fd = open_file_or_dir3(object, &dirstream, open_flags);
+	if (fd == -1) {
+		ret = -errno;
+		error("open failed, %s:%s", object, strerror(-ret));
+		goto out;
+	}
+
+	xattr_name = malloc(XATTR_BTRFS_PREFIX_LEN + strlen(name) + 1);
+	if (!xattr_name) {
+		ret = -ENOMEM;
+		goto out;
+	}
+	memcpy(xattr_name, XATTR_BTRFS_PREFIX, XATTR_BTRFS_PREFIX_LEN);
+	memcpy(xattr_name + XATTR_BTRFS_PREFIX_LEN, name, strlen(name));
+	xattr_name[XATTR_BTRFS_PREFIX_LEN + strlen(name)] = '\0';
+
+	val = kzalloc(val_sz, GFP_NOFS);
+	sret = fgetxattr(fd, xattr_name, val, val_sz);
+	ret = -errno;
+	if (value_out) {
+		if (sret == val_sz && !ret)
+			memcpy(value_out, val, val_sz);
+		else
+			error("attr '%s' get failed: '%s':'%s'\n",
+				xattr_name, object, strerror(-ret));
+		goto out;
+	}
+	if (!ret)
+		ctx_org = (struct fscrypt_context *)val;
+
+	if (etype && !is_encryption_type_supported(etype)) {
+		error("'%s' is not enabled/found on this system\n",
+					etype);
+		ret = -EPROTONOSUPPORT;
+		goto out;
+	}
+
+	ret = add_key_from_user(subvol_object, attr_keytag, &keyserial);
+	if (ret) {
+		error("Failed to create a key: %s", strerror(-ret));
+		goto out;
+	}
+
+	generate_fscrypt_policy(etype, attr_keytag, &policy, &policy_len);
+
+	ctx = (struct fscrypt_context *) policy;
+	if (ctx_org && memcmp(ctx_org->master_key_descriptor,
+		ctx->master_key_descriptor, FS_KEY_DESCRIPTOR_SIZE)) {
+		error("Wrong passphrase");
+		ret = -EINVAL;
+		goto out;
+	}
+
+	sret = fsetxattr(fd, xattr_name, policy, policy_len, 0);
+	if (sret) {
+		ret = -errno;
+		error("failed to set attribute '%s' to '%s' : %s",
+				xattr_name, policy, strerror(-ret));
+		keyctl(KEYCTL_REVOKE, keyserial);
+		goto out;
+	}
+
+out:
+	kfree(val);
+	kfree(subvol_object);
+	kfree(xattr_name);
+	if (fd >= 0)
+		close_file_or_dir(fd, dirstream);
+
+	return ret;
+}
+
+int prop_encrypt(enum prop_object_type type, const char *object,
+				const char *name, const char *value)
+{
+	int ret;
+
+	if (value) {
+		/* set prop */
+		ret = handle_prop_encrypt(type, object, name, value, NULL);
+	} else {
+		/* get prop */
+		char val_out[256] = {0};
+		ret = handle_prop_encrypt(type, object, name, NULL, val_out);
+		if (!ret)
+			print_encrypt_context((struct fscrypt_context *)val_out,
+						sizeof(struct fscrypt_context));
+	}
+	return ret;
+}
