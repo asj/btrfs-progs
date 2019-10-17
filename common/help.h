@@ -60,6 +60,11 @@
 #define HELPINFO_INSERT_GLOBALS		"",					\
 					"Global options:"
 #define HELPINFO_INSERT_FORMAT		"--foramt TYPE"
+/*
+ * Global verbose option for the sub-commands
+ */
+#define HELPINFO_INSERT_VERBOSE	"-v|--verbose       increase output verbosity"
+#define HELPINFO_INSERT_QUIET	"-q|--quiet         print only errors"
 
 struct cmd_struct;
 struct cmd_group;

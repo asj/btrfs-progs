@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include "common/messages.h"
+#include "common/utils.h"
 
 __attribute__ ((format (printf, 1, 2)))
 void __btrfs_warning(const char *fmt, ...)
@@ -74,4 +75,33 @@ int __btrfs_error_on(int condition, const char *fmt, ...)
 	fputc('\n', stderr);
 
 	return 1;
+}
+
+/*
+ * Print verbose helper function
+ * level: Minimum verbose level at which the message has to be printed.
+ *
+ * Values for argument level:
+ * MUST_LOG - Will log the message unless a quiet option is set.
+ *            Used where messages have to be printed for backward compatibility.
+ * > 0        Prints the message at the corresponding level.
+ */
+__attribute__ ((format (printf, 2, 3)))
+void pr_verbose(int level, const char *fmt, ...)
+{
+	va_list args;
+
+	if (bconf.verbose == BTRFS_BCONF_QUIET || level == BTRFS_BCONF_QUIET)
+		return;
+
+	/*
+	 * level is set by the threads requesting to print only if the command
+	 * verbose option is higher than the level.
+	 */
+	if (bconf.verbose < level)
+		return;
+
+	va_start(args, fmt);
+	vfprintf(stdout, fmt, args);
+	va_end(args);
 }

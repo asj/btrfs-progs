@@ -96,3 +96,7 @@ __attribute__ ((format (printf, 2, 3)))
 int __btrfs_error_on(int condition, const char *fmt, ...);
 
 #endif
+
+#define	MUST_LOG	-1
+__attribute__ ((format (printf, 2, 3)))
+void pr_verbose(int level, const char *fmt, ...);
