@@ -111,7 +111,8 @@ KiB, MiB, GiB, TiB, PiB, or EiB, respectively (case does not matter).
 `Options`
 +
 -v::::
-be verbose, print file names as they're submitted for defragmentation
+be verbose, print file names as they're submitted for defragmentation. This
+option is merged to the global verbose option.
 -c[<algo>]::::
 compress file contents while defragmenting. Optional argument selects the compression
 algorithm, 'zlib' (default), 'lzo' or 'zstd'. Currently it's not possible to select no
