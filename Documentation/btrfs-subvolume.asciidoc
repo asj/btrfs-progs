@@ -87,7 +87,8 @@ wait for transaction commit at the end of the operation.
 wait for transaction commit after deleting each subvolume.
 +
 -v|--verbose::::
-verbose output of operations.
+verbose output of operations. This option is merged to the global verbose
+option.
 +
 -i|--subvolid <subvolid>::::
 subvolume id to be removed instead of the <path> that should point to the
