@@ -99,7 +99,8 @@ act on metadata chunks, see `FILTERS` section for details about 'filters'
 -s[<filters>]::::
 act on system chunks (requires '-f'), see `FILTERS` section for details about 'filters'.
 -v::::
-be verbose and print balance filter arguments
+be verbose and print balance filter arguments. This option is merged to the
+global verbose option.
 -f::::
 force a reduction of metadata integrity, eg. when going from 'raid1' to 'single'
 --background|--bg::::
