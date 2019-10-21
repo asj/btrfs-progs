@@ -48,7 +48,8 @@ restore owner, mode and times for files and directories
 restore symbolic links as well as normal files
 
 -v|--verbose::
-be verbose and print what is being restored
+be verbose and print what is being restored. This option is merged to the
+global verbose option
 
 -i|--ignore-errors::
 ignore errors during restoration and continue
