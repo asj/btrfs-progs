@@ -38,8 +38,11 @@ static const char * const cmd_rescue_chunk_recover_usage[] = {
 	"Recover the chunk tree by scanning the devices one by one.",
 	"",
 	"-y	Assume an answer of `yes' to all questions",
-	"-v	Verbose mode",
+	"-v	Verbose mode. This option is merged to the global verbose",
+        "       option",
 	"-h	Help",
+	HELPINFO_INSERT_GLOBALS,
+	HELPINFO_INSERT_VERBOSE,
 	NULL
 };
 
@@ -49,7 +52,10 @@ static int cmd_rescue_chunk_recover(const struct cmd_struct *cmd,
 	int ret = 0;
 	char *file;
 	int yes = 0;
-	int verbose = 0;
+
+	/* If verbose is unset, set it to 0 */
+	if (bconf.verbose == BTRFS_BCONF_UNSET)
+		bconf.verbose = BTRFS_BCONF_QUIET;
 
 	optind = 0;
 	while (1) {
@@ -61,7 +67,7 @@ static int cmd_rescue_chunk_recover(const struct cmd_struct *cmd,
 			yes = 1;
 			break;
 		case 'v':
-			verbose = 1;
+			bconf.verbose++;
 			break;
 		default:
 			usage_unknown_option(cmd, argv);
@@ -83,7 +89,7 @@ static int cmd_rescue_chunk_recover(const struct cmd_struct *cmd,
 		return 1;
 	}
 
-	ret = btrfs_recover_chunk_tree(file, verbose, yes);
+	ret = btrfs_recover_chunk_tree(file, yes);
 	if (!ret) {
 		fprintf(stdout, "Chunk tree recovered successfully\n");
 	} else if (ret > 0) {

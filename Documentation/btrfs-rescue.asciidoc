@@ -24,7 +24,7 @@ Recover the chunk tree by scanning the devices
 -y::::
 assume an answer of 'yes' to all questions.
 -v::::
-verbose mode.
+verbose mode. This option is merged to the global verbose option.
 -h::::
 help.
 
