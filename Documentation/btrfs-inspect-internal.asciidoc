@@ -152,6 +152,7 @@ resolve paths to all files at given 'logical' address in the linear filesystem s
 skip the path resolving and print the inodes instead
 -v::::
 verbose mode, print count of returned paths and all ioctl() return values
+This option is merged to the global verbose option
 -o::::
 ignore offsets, find all references to an extent instead of a single block.
 Requires kernel support for the V2 ioctl (added in 4.15). The results might need
