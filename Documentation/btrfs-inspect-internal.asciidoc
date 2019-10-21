@@ -139,6 +139,7 @@ at 'path', ie. all hardlinks
 +
 -v::::
 verbose mode, print count of returned paths and ioctl() return value
+This option is merged to the global verbose option
 
 *logical-resolve* [-Pvo] [-s <bufsize>] <logical> <path>::
 (needs root privileges)
