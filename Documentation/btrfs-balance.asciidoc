@@ -110,7 +110,8 @@ start the process that calls the kernel ioctl
 *status* [-v] <path>::
 Show status of running or paused balance.
 +
-If '-v' option is given, output will be verbose.
+If '-v' option is given, output will be verbose. This option is merged to the
+global verbose option.
 
 FILTERS
 -------
