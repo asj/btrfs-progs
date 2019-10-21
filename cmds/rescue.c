@@ -107,7 +107,10 @@ static const char * const cmd_rescue_super_recover_usage[] = {
 	"Recover bad superblocks from good copies",
 	"",
 	"-y	Assume an answer of `yes' to all questions",
-	"-v	Verbose mode",
+	"-v	Verbose mode. This option is merged to the global verbose",
+	"	option",
+	HELPINFO_INSERT_GLOBALS,
+	HELPINFO_INSERT_VERBOSE,
 	NULL
 };
 
@@ -123,7 +126,6 @@ static int cmd_rescue_super_recover(const struct cmd_struct *cmd,
 				    int argc, char **argv)
 {
 	int ret;
-	int verbose = 0;
 	int yes = 0;
 	char *dname;
 
@@ -134,7 +136,7 @@ static int cmd_rescue_super_recover(const struct cmd_struct *cmd,
 			break;
 		switch (c) {
 		case 'v':
-			verbose = 1;
+			bconf_be_verbose();
 			break;
 		case 'y':
 			yes = 1;
@@ -156,7 +158,7 @@ static int cmd_rescue_super_recover(const struct cmd_struct *cmd,
 		error("the device is busy");
 		return 1;
 	}
-	ret = btrfs_recover_superblocks(dname, verbose, yes);
+	ret = btrfs_recover_superblocks(dname, yes);
 	return ret;
 }
 static DEFINE_SIMPLE_COMMAND(rescue_super_recover, "super-recover");

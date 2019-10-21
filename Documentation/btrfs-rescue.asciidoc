@@ -58,7 +58,7 @@ Recover bad superblocks from good copies.
 -y::::
 assume an answer of 'yes' to all questions.
 -v::::
-verbose mode.
+verbose mode. This option is merged to the global verbose option.
 
 *zero-log* <device>::
 clear the filesystem log tree
