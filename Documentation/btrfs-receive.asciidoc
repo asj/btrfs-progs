@@ -36,10 +36,12 @@ A subvolume is made read-only after the receiving process finishes successfully 
 `Options`
 
 -v::
-increase verbosity about performed actions, print details about each operation
+increase verbosity about performed actions, print details about each operation.
+This option is merged to the global verbose option.
 
 -q|--quiet::
-suppress all messages except errors
+suppress all messages except errors. This option is merged to the global quiet option.
+
 
 -f <FILE>::
 read the stream from <FILE> instead of stdin,
