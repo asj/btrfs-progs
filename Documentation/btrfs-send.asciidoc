@@ -58,9 +58,11 @@ is useful to show the differences in metadata.
 
 -v|--verbose::
 enable verbose output, print generated commands in a readable form, (each
-occurrence of this option increases the verbosity level)
+occurrence of this option increases the verbosity level). This option is
+merged to the global verbose option.
 -q|--quiet::
-suppress all messages except errors
+suppress all messages except errors. This option is merged to the global quiet
+option.
 
 EXIT STATUS
 -----------
