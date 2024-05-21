@@ -49,6 +49,7 @@ is in the :doc:`manual pages<man-index>`.
    Convert
    Deduplication
    Defragmentation
+   Device-assembly-and-verification
    Inline-files
    Qgroups
    Reflink
