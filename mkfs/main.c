@@ -1742,8 +1742,11 @@ int BOX_MAIN(mkfs)(int argc, char **argv)
 			goto error;
 		}
 	}
-	ret = test_num_disk_vs_raid(metadata_profile, data_profile,
-			device_count, mixed, ssd);
+	ret = test_num_disk_vs_raid(metadata_profile, device_count, mixed, ssd);
+	if (ret)
+		goto error;
+
+	ret = test_num_disk_vs_raid(data_profile, device_count, mixed, ssd);
 	if (ret)
 		goto error;
 

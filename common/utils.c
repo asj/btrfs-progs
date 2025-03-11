@@ -366,39 +366,33 @@ int get_fsid(const char *path, u8 *fsid, int silent)
 	return ret;
 }
 
-int test_num_disk_vs_raid(u64 metadata_profile, u64 data_profile,
-	u64 dev_cnt, int mixed, int ssd)
+int test_num_disk_vs_raid(u64 bg_profile, u64 dev_cnt, int mixed, int ssd)
 {
 	u64 allowed;
-	u64 profile = metadata_profile | data_profile;
 
 	allowed = btrfs_bg_flags_for_device_num(dev_cnt);
 
-	if (dev_cnt > 1 && profile & BTRFS_BLOCK_GROUP_DUP) {
+	if (dev_cnt > 1 && (bg_profile & BTRFS_BLOCK_GROUP_DUP)) {
 		warning("DUP is not recommended on filesystem with multiple devices");
 	}
-	if (metadata_profile & ~allowed) {
-		error("unable to create FS with metadata profile %s "
+
+	if (bg_profile & ~allowed) {
+		error("unable to create FS with %s profile %s "
 			"(have %llu devices but %d devices are required)",
-			btrfs_group_profile_str(metadata_profile), dev_cnt,
-			btrfs_bg_type_to_devs_min(metadata_profile));
-		return 1;
-	}
-	if (data_profile & ~allowed) {
-		error("ERROR: unable to create FS with data profile %s "
-			"(have %llu devices but %d devices are required)",
-			btrfs_group_profile_str(data_profile), dev_cnt,
-			btrfs_bg_type_to_devs_min(data_profile));
+			btrfs_group_type_str(bg_profile),
+			btrfs_group_profile_str(bg_profile), dev_cnt,
+			btrfs_bg_type_to_devs_min(bg_profile));
 		return 1;
 	}
 
-	if (dev_cnt == 3 && profile & BTRFS_BLOCK_GROUP_RAID6) {
+	if (dev_cnt == 3 && (bg_profile & BTRFS_BLOCK_GROUP_RAID6)) {
 		warning("RAID6 is not recommended on filesystem with 3 devices only");
 	}
-	if (dev_cnt == 2 && profile & BTRFS_BLOCK_GROUP_RAID5) {
+	if (dev_cnt == 2 && (bg_profile & BTRFS_BLOCK_GROUP_RAID5)) {
 		warning("RAID5 is not recommended on filesystem with 2 devices only");
 	}
-	warning_on(!mixed && (data_profile & BTRFS_BLOCK_GROUP_DUP) && ssd,
+	warning_on(!mixed && (bg_profile & BTRFS_BLOCK_GROUP_DUP) && ssd &&
+		   (bg_profile & BTRFS_BLOCK_GROUP_DATA),
 		   "DUP may not actually lead to 2 copies on the device, see manual page");
 
 	return 0;
