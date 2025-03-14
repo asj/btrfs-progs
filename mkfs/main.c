@@ -126,41 +126,24 @@ static int create_metadata_block_groups(struct btrfs_root *root, bool mixed,
 	if (ret)
 		return ret;
 
-	if (mixed) {
-		ret = btrfs_alloc_chunk(trans, fs_info,
-					&chunk_start, &chunk_size,
-					BTRFS_BLOCK_GROUP_METADATA |
-					BTRFS_BLOCK_GROUP_DATA);
-		if (ret == -ENOSPC) {
-			error("no space to allocate data/metadata chunk");
-			goto err;
-		}
-		if (ret)
-			return ret;
-		ret = btrfs_make_block_group(trans, fs_info, 0,
-					     BTRFS_BLOCK_GROUP_METADATA |
-					     BTRFS_BLOCK_GROUP_DATA,
-					     chunk_start, chunk_size);
-		if (ret)
-			return ret;
-		allocation->mixed += chunk_size;
-	} else {
-		ret = btrfs_alloc_chunk(trans, fs_info,
-					&chunk_start, &chunk_size,
-					BTRFS_BLOCK_GROUP_METADATA);
-		if (ret == -ENOSPC) {
-			error("no space to allocate metadata chunk");
-			goto err;
-		}
-		if (ret)
-			return ret;
-		ret = btrfs_make_block_group(trans, fs_info, 0,
-					     BTRFS_BLOCK_GROUP_METADATA,
-					     chunk_start, chunk_size);
-		if (ret)
-			return ret;
-		allocation->metadata += chunk_size;
+	ret = btrfs_alloc_chunk(trans, fs_info, &chunk_start, &chunk_size,
+				flags);
+	if (ret == -ENOSPC) {
+		error("no space to allocate data/metadata chunk");
+		goto err;
 	}
+	if (ret)
+		return ret;
+
+	ret = btrfs_make_block_group(trans, fs_info, 0, flags, chunk_start,
+				     chunk_size);
+	if (ret)
+		return ret;
+
+	if (mixed)
+		allocation->mixed += chunk_size;
+	else
+		allocation->metadata += chunk_size;
 
 	root->fs_info->system_allocs = 0;
 	ret = btrfs_commit_transaction(trans, root);
