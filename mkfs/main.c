@@ -157,9 +157,9 @@ static int create_metadata_block_groups(struct btrfs_root *root, bool mixed,
 		ret = btrfs_make_block_group(trans, fs_info, 0,
 					     BTRFS_BLOCK_GROUP_METADATA,
 					     chunk_start, chunk_size);
-		allocation->metadata += chunk_size;
 		if (ret)
 			return ret;
+		allocation->metadata += chunk_size;
 	}
 
 	root->fs_info->system_allocs = 0;
