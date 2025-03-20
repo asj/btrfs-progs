@@ -403,8 +403,14 @@ static int create_raid_groups(struct btrfs_trans_handle *trans,
 }
 
 static const char * const mkfs_usage[] = {
-	"mkfs.btrfs [options] <dev> [<dev...>]",
+	"mkfs.btrfs [options] <dev[:profile]> [<dev[:profile]...>]",
 	"Create a BTRFS filesystem on a device or multiple devices",
+	"",
+	"Device-specific roles or profiles:",
+	OPTLINE(":m|:metadata", "Preferred for metadata block-group allocations"),
+	OPTLINE(":d|:data", "Preferred for data block-group allocations"),
+	OPTLINE(":monly|:metadata-only", "Must be used for metadata block-group allocations only"),
+	OPTLINE(":donly|:data-only", "Must be used for data block-group allocations only"),
 	"",
 	"Allocation profiles:",
 	OPTLINE("-d|--data PROFILE", "data profile, raid0, raid1, raid1c3, raid1c4, raid5, raid6, raid10, dup or single"),
@@ -1002,12 +1008,14 @@ static int setup_raid_stripe_tree_root(struct btrfs_fs_info *fs_info)
 struct device_arg {
 	struct list_head list;
 	char path[PATH_MAX];
+	enum btrfs_device_roles role;
 };
 
 static struct device_arg *parse_device_arg(const char *path,
 					    struct list_head *devices)
 {
 	struct device_arg *device;
+	char *colon;
 
 	device = calloc(1, sizeof(struct device_arg));
 	if (!device) {
@@ -1015,11 +1023,23 @@ static struct device_arg *parse_device_arg(const char *path,
 		return ERR_PTR(-ENOMEM);
 	}
 
+	/* Copy path and type (separated by ':'), then replace ':' with null. */
 	if (arg_copy_path(device->path, path, sizeof(device->path))) {
 		error("Device path '%s' length '%ld' is too long",
 		      path, strlen(path));
 		free(device);
 		return ERR_PTR(-EINVAL);
+	}
+
+	colon = strstr(path, ":");
+	if (colon) {
+		device->path[colon - path] = '\0';
+		if (parse_device_role(colon + 1, &device->role)) {
+			error("Invalid device profile");
+			return ERR_PTR(-EINVAL);
+		}
+	} else {
+		device->role = 0;
 	}
 
 	list_add_tail(&device->list, devices);
@@ -1184,6 +1204,8 @@ int BOX_MAIN(mkfs)(int argc, char **argv)
 	u64 min_dev_size;
 	u64 shrink_size;
 	int device_count = 0;
+	int metadata_device_count = 0;
+	int data_device_count = 0;
 	pthread_t *t_prepare = NULL;
 	struct prepare_device_progress *prepare_ctx = NULL;
 	struct mkfs_allocation allocation = { 0 };
@@ -1561,6 +1583,28 @@ int BOX_MAIN(mkfs)(int argc, char **argv)
 			goto error;
 	}
 
+	list_for_each_entry(arg_device, &arg_devices, list) {
+		enum btrfs_device_roles role = arg_device->role;
+
+		if (role == BTRFS_DEVICE_ROLE_NONE ||
+		    role == 0 ||
+		    role == BTRFS_DEVICE_ROLE_METADATA ||
+		    role == BTRFS_DEVICE_ROLE_DATA) {
+			metadata_device_count++;
+			data_device_count++;
+		} else if (role == BTRFS_DEVICE_ROLE_METADATA_ONLY) {
+			metadata_device_count++;
+		} else if (role == BTRFS_DEVICE_ROLE_DATA_ONLY) {
+			data_device_count++;
+		}
+
+		if (mixed && role != BTRFS_DEVICE_ROLE_NONE && role != 0) {
+			error("Mixed mode can't put metadata and data to separate devices");
+			ret = 1;
+			goto error;
+		}
+	}
+
 	arg_device = list_first_entry(&arg_devices, struct device_arg, list);
 	file = arg_device->path;
 	ssd = device_get_rotational(file);
@@ -1584,14 +1628,14 @@ int BOX_MAIN(mkfs)(int argc, char **argv)
 		u64 tmp;
 
 		if (!metadata_profile_set) {
-			if (device_count > 1)
+			if (metadata_device_count > 1)
 				tmp = BTRFS_MKFS_DEFAULT_META_MULTI_DEVICE;
 			else
 				tmp = BTRFS_MKFS_DEFAULT_META_ONE_DEVICE;
 			metadata_profile = tmp;
 		}
 		if (!data_profile_set) {
-			if (device_count > 1)
+			if (data_device_count > 1)
 				tmp = BTRFS_MKFS_DEFAULT_DATA_MULTI_DEVICE;
 			else
 				tmp = BTRFS_MKFS_DEFAULT_DATA_ONE_DEVICE;
@@ -1774,15 +1818,17 @@ int BOX_MAIN(mkfs)(int argc, char **argv)
 			goto error;
 		}
 	}
-	ret = test_num_disk_vs_raid(metadata_profile, device_count, mixed, ssd);
+	ret = test_num_disk_vs_raid(metadata_profile, metadata_device_count,
+				    mixed, ssd);
 	if (ret)
 		goto error;
 
-	ret = test_num_disk_vs_raid(data_profile, device_count, mixed, ssd);
+	ret = test_num_disk_vs_raid(data_profile, data_device_count, mixed,
+				    ssd);
 	if (ret)
 		goto error;
 
-	if (opt_zoned && device_count) {
+	if (opt_zoned && data_device_count) {
 		switch (data_profile & BTRFS_BLOCK_GROUP_PROFILE_MASK) {
 		case BTRFS_BLOCK_GROUP_DUP:
 		case BTRFS_BLOCK_GROUP_RAID1:
