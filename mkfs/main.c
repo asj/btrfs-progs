@@ -999,6 +999,34 @@ static int setup_raid_stripe_tree_root(struct btrfs_fs_info *fs_info)
 	return 0;
 }
 
+struct device_arg {
+	struct list_head list;
+	char path[PATH_MAX];
+};
+
+static struct device_arg *parse_device_arg(const char *path,
+					    struct list_head *devices)
+{
+	struct device_arg *device;
+
+	device = calloc(1, sizeof(struct device_arg));
+	if (!device) {
+		error_msg(ERROR_MSG_MEMORY, NULL);
+		return ERR_PTR(-ENOMEM);
+	}
+
+	if (arg_copy_path(device->path, path, sizeof(device->path))) {
+		error("Device path '%s' length '%ld' is too long",
+		      path, strlen(path));
+		free(device);
+		return ERR_PTR(-EINVAL);
+	}
+
+	list_add_tail(&device->list, devices);
+
+	return device;
+}
+
 /* Thread callback for device preparation */
 static void *prepare_one_device(void *ctx)
 {
@@ -1156,7 +1184,6 @@ int BOX_MAIN(mkfs)(int argc, char **argv)
 	u64 min_dev_size;
 	u64 shrink_size;
 	int device_count = 0;
-	int saved_optind;
 	pthread_t *t_prepare = NULL;
 	struct prepare_device_progress *prepare_ctx = NULL;
 	struct mkfs_allocation allocation = { 0 };
@@ -1186,6 +1213,8 @@ int BOX_MAIN(mkfs)(int argc, char **argv)
 	enum btrfs_compression_type compression = BTRFS_COMPRESS_NONE;
 	unsigned int compression_level = 0;
 	LIST_HEAD(subvols);
+	struct device_arg *arg_device;
+	LIST_HEAD(arg_devices);
 
 	cpu_detect_flags();
 	hash_init_accel();
@@ -1392,7 +1421,6 @@ int BOX_MAIN(mkfs)(int argc, char **argv)
 		nodesize = max_t(u32, sectorsize, BTRFS_MKFS_DEFAULT_NODE_SIZE);
 
 	stripesize = sectorsize;
-	saved_optind = optind;
 	device_count = argc - optind;
 	if (device_count == 0)
 		usage(&mkfs_cmd, 1);
@@ -1515,6 +1543,13 @@ int BOX_MAIN(mkfs)(int argc, char **argv)
 	for (i = 0; i < device_count; i++) {
 		file = argv[optind++];
 
+		arg_device = parse_device_arg(file, &arg_devices);
+		if (IS_ERR(arg_device)) {
+			ret = 1;
+			goto error;
+		}
+		file = arg_device->path;
+
 		if (source_dir && path_exists(file) == 0)
 			ret = 0;
 		else if (path_is_block_device(file) == 1)
@@ -1526,10 +1561,8 @@ int BOX_MAIN(mkfs)(int argc, char **argv)
 			goto error;
 	}
 
-	optind = saved_optind;
-	device_count = argc - optind;
-
-	file = argv[optind++];
+	arg_device = list_first_entry(&arg_devices, struct device_arg, list);
+	file = arg_device->path;
 	ssd = device_get_rotational(file);
 	if (opt_zoned) {
 		if (!zone_size(file)) {
@@ -1725,10 +1758,9 @@ int BOX_MAIN(mkfs)(int argc, char **argv)
 		goto error;
 	}
 
-	for (i = saved_optind; i < saved_optind + device_count; i++) {
-		char *path;
+	list_for_each_entry(arg_device, &arg_devices, list) {
+		char *path = arg_device->path;
 
-		path = argv[i];
 		ret = test_minimum_size(path, min_dev_size);
 		if (ret < 0) {
 			error("failed to check size for %s: %m", path);
@@ -1793,17 +1825,18 @@ int BOX_MAIN(mkfs)(int argc, char **argv)
 	}
 
 	opt_oflags = O_RDWR;
-	for (i = 0; i < device_count; i++) {
+	list_for_each_entry(arg_device, &arg_devices, list) {
 		if (opt_zoned &&
-		    zoned_model(argv[optind + i - 1]) == ZONED_HOST_MANAGED) {
+		    zoned_model(arg_device->path) == ZONED_HOST_MANAGED) {
 			opt_oflags |= O_DIRECT;
 			break;
 		}
 	}
 
 	/* Start threads */
-	for (i = 0; i < device_count; i++) {
-		prepare_ctx[i].file = argv[optind + i - 1];
+	i = 0;
+	list_for_each_entry(arg_device, &arg_devices, list) {
+		prepare_ctx[i].file = arg_device->path;
 		prepare_ctx[i].byte_count = byte_count;
 		prepare_ctx[i].dev_byte_count = byte_count;
 		ret = pthread_create(&t_prepare[i], NULL, prepare_one_device,
@@ -1814,6 +1847,7 @@ int BOX_MAIN(mkfs)(int argc, char **argv)
 					prepare_ctx[i].file);
 			goto error;
 		}
+		i++;
 	}
 
 	/* Wait for threads */
@@ -1973,11 +2007,11 @@ int BOX_MAIN(mkfs)(int argc, char **argv)
 			goto error;
 		}
 		if (bconf.verbose >= LOG_INFO) {
-			struct btrfs_device *device;
+			struct btrfs_device *tmp;
 
-			device = container_of(fs_info->fs_devices->devices.next,
-					struct btrfs_device, dev_list);
-			printf("adding device %s id %llu\n", file, device->devid);
+			tmp = container_of(fs_info->fs_devices->devices.next,
+					   struct btrfs_device, dev_list);
+			printf("adding device %s id %llu\n", file, tmp->devid);
 		}
 	}
 
@@ -2174,10 +2208,8 @@ out:
 	close_ret = close_ctree(root);
 
 	if (!close_ret) {
-		optind = saved_optind;
-		device_count = argc - optind;
-		while (device_count-- > 0) {
-			file = argv[optind++];
+		list_for_each_entry(arg_device, &arg_devices, list) {
+			file = arg_device->path;
 			if (path_is_block_device(file) == 1)
 				btrfs_register_one_device(file);
 		}
@@ -2205,6 +2237,14 @@ error:
 		struct rootdir_subvol *head;
 
 		head = list_entry(subvols.next, struct rootdir_subvol, list);
+		list_del(&head->list);
+		free(head);
+	}
+
+	while (!list_empty(&arg_devices)) {
+		struct device_arg *head;
+
+		head = list_entry(arg_devices.next, struct device_arg, list);
 		list_del(&head->list);
 		free(head);
 	}
