@@ -35,6 +35,7 @@
 #include "kernel-shared/disk-io.h"
 #include "kernel-shared/ctree.h"
 #include "kernel-shared/zoned.h"
+#include "kernel-shared/volumes.h"
 #include "kernel-shared/uapi/btrfs.h"
 #include "kernel-shared/uapi/btrfs_tree.h"
 #include "common/device-utils.h"
@@ -652,4 +653,37 @@ int cmp_device_id(void *priv, struct list_head *a, struct list_head *b)
 
 	return da->devid < db->devid ? -1 :
 		da->devid > db->devid ? 1 : 0;
+}
+
+int btrfs_cmp_role(enum btrfs_device_roles a, enum btrfs_device_roles b,
+		   bool assend)
+{
+	if (a == 0)
+		a = BTRFS_DEVICE_ROLE_NONE;
+
+	if (b == 0)
+		b = BTRFS_DEVICE_ROLE_NONE;
+
+	if (assend)
+		return a > b ? -1 : a < b ? 1 : 0;
+	else
+		return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/*
+ * Sort or reverse sort device list for metadata or data.
+ */
+int cmp_device_role(void *type, struct list_head *a, struct list_head *b)
+{
+	const struct btrfs_device *da = list_entry(a, struct btrfs_device,
+						   dev_list);
+	const struct btrfs_device *db = list_entry(b, struct btrfs_device,
+						   dev_list);
+	u64 *profile = type;
+	enum btrfs_device_roles role_a = da->type;
+	enum btrfs_device_roles role_b = db->type;
+	bool assend = ((*profile & BTRFS_BLOCK_GROUP_TYPE_MASK) ==
+			BTRFS_BLOCK_GROUP_DATA);
+
+	return btrfs_cmp_role(role_a, role_b, assend);
 }

@@ -1047,6 +1047,62 @@ static struct device_arg *parse_device_arg(const char *path,
 	return device;
 }
 
+static int btrfs_device_update_role(struct btrfs_fs_info *fs_info,
+				    struct list_head *devices)
+{
+	struct device_arg *arg_device;
+	struct btrfs_device *device;
+
+	list_for_each_entry(device, &fs_info->fs_devices->devices,
+			    dev_list) {
+		bool found = false;
+
+		list_for_each_entry(arg_device, devices, list) {
+			if (strncmp(arg_device->path, device->name,
+				    strlen(device->name)) == 0) {
+				device->bg_type = arg_device->bg_type;
+				found = true;
+				break;
+			}
+		}
+		/*
+		 * This may fail if the device scan detects the mapper path
+		 * while the argument specifies its DM path. Use MAJ:MIN?
+		 * However, get an example first.
+		 */
+		if (!found) {
+			error("Device not found in the arg '%s'", device->name);
+			return -EINVAL;
+		}
+	}
+	return 0;
+}
+
+static int cmp_device_arg_role(void *type, struct list_head *a,
+			       struct list_head *b)
+{
+	const struct device_arg *da = list_entry(a, struct device_arg, list);
+	const struct device_arg *db = list_entry(b, struct device_arg, list);
+	u64 *profile = type;
+	enum btrfs_device_roles role_a = da->role;
+	enum btrfs_device_roles role_b = db->role;
+	bool assend;
+
+	assend = ((*profile & BTRFS_BLOCK_GROUP_TYPE_MASK) ==
+		  BTRFS_BLOCK_GROUP_DATA);
+
+	if (role_a == 0)
+		role_a = BTRFS_DEVICE_ROLE_NONE;
+
+	if (role_b == 0)
+		role_b = BTRFS_DEVICE_ROLE_NONE;
+
+	if (assend)
+		return role_a > role_b ? -1 : role_a < role_b ? 1 : 0;
+	else
+		return role_a < role_b ? -1 : role_a > role_b ? 1 : 0;
+}
+
 /* Thread callback for device preparation */
 static void *prepare_one_device(void *ctx)
 {
@@ -1237,6 +1293,7 @@ int BOX_MAIN(mkfs)(int argc, char **argv)
 	LIST_HEAD(subvols);
 	struct device_arg *arg_device;
 	LIST_HEAD(arg_devices);
+	u64 bg_metadata;
 
 	cpu_detect_flags();
 	hash_init_accel();
@@ -1604,6 +1661,13 @@ int BOX_MAIN(mkfs)(int argc, char **argv)
 			goto error;
 		}
 	}
+
+	/*
+	 * Make sure devices marked as 'metadata preferred' end up at the top,
+	 * so that, it will be our bootstrap device.
+	 */
+	bg_metadata = BTRFS_BLOCK_GROUP_METADATA;
+	list_sort(&bg_metadata, &arg_devices, cmp_device_arg_role);
 
 	arg_device = list_first_entry(&arg_devices, struct device_arg, list);
 	file = arg_device->path;
@@ -2063,6 +2127,11 @@ int BOX_MAIN(mkfs)(int argc, char **argv)
 
 	if (opt_zoned)
 		btrfs_get_dev_zone_info_all_devices(fs_info);
+
+	if (btrfs_device_update_role(fs_info, &arg_devices)) {
+		ret = 1;
+		goto error;
+	}
 
 raid_groups:
 	ret = create_raid_groups(trans, root, data_profile,

@@ -26,6 +26,7 @@
 #include <stddef.h>
 #include <string.h>
 #include "kernel-lib/raid56.h"
+#include "kernel-lib/list_sort.h"
 #include "kernel-shared/ctree.h"
 #include "kernel-shared/disk-io.h"
 #include "kernel-shared/transaction.h"
@@ -1726,6 +1727,10 @@ int btrfs_alloc_chunk(struct btrfs_trans_handle *trans,
 	/* start and num_bytes will be set by create_chunk() */
 	ctl.start = 0;
 	ctl.num_bytes = 0;
+
+	/* Sort devices according to device block-group type preference. */
+	list_sort(&type, devs, cmp_device_role);
+
 	init_alloc_chunk_ctl(info, &ctl);
 	if (ctl.num_stripes < ctl.min_stripes)
 		return -ENOSPC;
