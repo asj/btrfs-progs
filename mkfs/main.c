@@ -1047,6 +1047,44 @@ static struct device_arg *parse_device_arg(const char *path,
 	return device;
 }
 
+static inline u8 device_role(struct btrfs_device *device)
+{
+	u64 type = le64_to_cpu(device->type);
+
+	/*
+	 * The on-disk value `0` for `dev_item::type:8` maps to
+	 * `BTRFS_DEVICE_ROLE_NONE` in memory, which is defined as `80`.
+	 */
+	if ((type & BTRFS_DEVICE_ROLE_MASK) == 0)
+		return BTRFS_DEVICE_ROLE_NONE;
+	else
+		return (u8)(type & BTRFS_DEVICE_ROLE_MASK);
+}
+
+static inline int set_device_role(struct btrfs_device *device, u8 value)
+{
+	u64 type;
+
+	if (value > BTRFS_DEVICE_ROLE_MAX)
+		return -EINVAL;
+
+	type = le64_to_cpu(device->type);
+
+	/*
+	 * If roles aren't being set, we keep the on-disk value as zero so that
+	 * ondisk format remains compatible with the older kernels.
+	 */
+	if (value == BTRFS_DEVICE_ROLE_NONE)
+		value = 0;
+
+	type = (type & ~BTRFS_DEVICE_ROLE_MASK) | \
+		(value & BTRFS_DEVICE_ROLE_MASK);
+
+	device->type = cpu_to_le64(type);
+
+	return 0;
+}
+
 static int btrfs_device_update_role(struct btrfs_fs_info *fs_info,
 				    struct list_head *devices)
 {
