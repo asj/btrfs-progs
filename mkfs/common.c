@@ -604,7 +604,7 @@ int make_btrfs(int fd, struct btrfs_mkfs_config *cfg)
 	btrfs_set_device_io_align(buf, dev_item, cfg->sectorsize);
 	btrfs_set_device_io_width(buf, dev_item, cfg->sectorsize);
 	btrfs_set_device_sector_size(buf, dev_item, cfg->sectorsize);
-	btrfs_set_device_type(buf, dev_item, 0);
+	btrfs_set_device_type(buf, dev_item, cfg->dev_bg_type);
 
 	write_extent_buffer(buf, super.dev_item.uuid,
 			    (unsigned long)btrfs_device_uuid(dev_item),

@@ -52,7 +52,7 @@ int btrfs_register_all_devices(void);
 int btrfs_add_to_fsid(struct btrfs_trans_handle *trans,
 		      struct btrfs_root *root, int fd, const char *path,
 		      u64 device_total_bytes, u32 io_width, u32 io_align,
-		      u32 sectorsize);
+		      u32 sectorsize, u64 type);
 int btrfs_device_already_in_root(struct btrfs_root *root, int fd,
 				 int super_offset);
 int is_seen_fsid(u8 *fsid, struct seen_fsid *seen_fsid_hash[]);

@@ -82,6 +82,7 @@ struct prepare_device_progress {
 	u64 dev_byte_count;
 	u64 byte_count;
 	int ret;
+	struct device_arg *device_arg;
 };
 
 static int create_metadata_block_groups(struct btrfs_root *root, bool mixed,
@@ -1098,7 +1099,8 @@ static int btrfs_device_update_role(struct btrfs_fs_info *fs_info,
 		list_for_each_entry(arg_device, devices, list) {
 			if (strncmp(arg_device->path, device->name,
 				    strlen(device->name)) == 0) {
-				device->bg_type = arg_device->bg_type;
+				if (set_device_role(device, arg_device->role))
+					return -EINVAL;
 				found = true;
 				break;
 			}
@@ -1332,6 +1334,7 @@ int BOX_MAIN(mkfs)(int argc, char **argv)
 	struct device_arg *arg_device;
 	LIST_HEAD(arg_devices);
 	u64 bg_metadata;
+	const int mkfs_dev_index = 0;
 
 	cpu_detect_flags();
 	hash_init_accel();
@@ -1987,6 +1990,7 @@ int BOX_MAIN(mkfs)(int argc, char **argv)
 		prepare_ctx[i].file = arg_device->path;
 		prepare_ctx[i].byte_count = byte_count;
 		prepare_ctx[i].dev_byte_count = byte_count;
+		prepare_ctx[i].device_arg = arg_device;
 		ret = pthread_create(&t_prepare[i], NULL, prepare_one_device,
 				     &prepare_ctx[i]);
 		if (ret) {
@@ -2044,7 +2048,8 @@ int BOX_MAIN(mkfs)(int argc, char **argv)
 	else
 		mkfs_cfg.zone_size = 0;
 
-	ret = make_btrfs(prepare_ctx[0].fd, &mkfs_cfg);
+	mkfs_cfg.dev_bg_type = prepare_ctx[mkfs_dev_index].device_arg->role;
+	ret = make_btrfs(prepare_ctx[mkfs_dev_index].fd, &mkfs_cfg);
 	if (ret) {
 		errno = -ret;
 		error("error during mkfs: %m");
@@ -2147,7 +2152,8 @@ int BOX_MAIN(mkfs)(int argc, char **argv)
 
 		ret = btrfs_add_to_fsid(trans, root, prepare_ctx[i].fd,
 					prepare_ctx[i].file, dev_byte_count,
-					sectorsize, sectorsize, sectorsize);
+					sectorsize, sectorsize, sectorsize,
+					prepare_ctx[i].device_arg->role);
 		if (ret) {
 			errno = -ret;
 			error("unable to add %s to filesystem: %m",

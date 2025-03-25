@@ -100,6 +100,9 @@ struct btrfs_mkfs_config {
 
 	/* Superblock offset after make_btrfs */
 	u64 super_bytenr;
+
+	/* dev_item::type value */
+	u64 dev_bg_type;
 };
 
 int make_btrfs(int fd, struct btrfs_mkfs_config *cfg);

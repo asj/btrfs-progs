@@ -129,7 +129,7 @@ int test_uuid_unique(const char *uuid_str)
 int btrfs_add_to_fsid(struct btrfs_trans_handle *trans,
 		      struct btrfs_root *root, int fd, const char *path,
 		      u64 device_total_bytes, u32 io_width, u32 io_align,
-		      u32 sectorsize)
+		      u32 sectorsize, u64 type)
 {
 	struct btrfs_super_block *disk_super;
 	struct btrfs_fs_info *fs_info = root->fs_info;
@@ -160,7 +160,7 @@ int btrfs_add_to_fsid(struct btrfs_trans_handle *trans,
 	uuid_generate(device->uuid);
 	device->fs_info = fs_info;
 	device->devid = 0;
-	device->type = 0;
+	device->type = type;
 	device->io_width = io_width;
 	device->io_align = io_align;
 	device->sector_size = sectorsize;
