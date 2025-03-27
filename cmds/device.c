@@ -122,34 +122,62 @@ static int cmd_device_add(const struct cmd_struct *cmd,
 	}
 	zoned = (feature_flags.incompat_flags & BTRFS_FEATURE_INCOMPAT_ZONED);
 
-	for (i = optind; i < last_dev; i++){
+	for (i = optind; i < last_dev; i++) {
 		struct btrfs_ioctl_vol_args ioctl_args;
 		int	devfd, res;
 		u64 dev_block_count = 0;
+		char temp_argv[PATH_MAX];
+		char final_argv[PATH_MAX];
 		char *path;
+		char *colon;
+		enum btrfs_device_roles role;
 
-		if (!zoned && zoned_model(argv[i]) == ZONED_HOST_MANAGED) {
-			error(
-"zoned: cannot add host-managed zoned device to non-zoned filesystem '%s'",
-			      argv[i]);
+		/*
+		 * Copy path and role (separated by ':'), then replace ':'
+		 * with null.
+		 */
+		if (arg_copy_path(temp_argv, argv[i], PATH_MAX)) {
+			error("Device path '%s' length '%ld' is too long",
+			      argv[i], strlen(argv[i]));
 			ret++;
 			continue;
 		}
 
-		res = test_dev_for_mkfs(argv[i], force);
+		colon = strstr(temp_argv, ":");
+		if (colon) {
+			*colon = '\0';
+			colon++;
+			if (parse_device_role(colon, &role)) {
+				error("Invalid device profile");
+				ret++;
+				continue;
+			}
+		} else {
+			role = 0;
+		}
+
+		if (!zoned && zoned_model(temp_argv) == ZONED_HOST_MANAGED) {
+			error(
+"zoned: cannot add host-managed zoned device to non-zoned filesystem '%s'",
+			      temp_argv);
+			ret++;
+			continue;
+		}
+
+		res = test_dev_for_mkfs(temp_argv, force);
 		if (res) {
 			ret++;
 			continue;
 		}
 
-		devfd = open(argv[i], O_RDWR);
+		devfd = open(temp_argv, O_RDWR);
 		if (devfd < 0) {
-			error("unable to open device '%s'", argv[i]);
+			error("unable to open device '%s'", temp_argv);
 			ret++;
 			continue;
 		}
 
-		res = btrfs_prepare_device(devfd, argv[i], &dev_block_count, 0,
+		res = btrfs_prepare_device(devfd, temp_argv, &dev_block_count, 0,
 				PREP_DEVICE_ZERO_END | PREP_DEVICE_VERBOSE |
 				(discard ? PREP_DEVICE_DISCARD : 0) |
 				(zoned ? PREP_DEVICE_ZONED : 0));
@@ -159,19 +187,26 @@ static int cmd_device_add(const struct cmd_struct *cmd,
 			goto error_out;
 		}
 
-		path = path_canonicalize(argv[i]);
+		path = path_canonicalize(temp_argv);
 		if (!path) {
 			error("could not canonicalize pathname '%s': %m",
-				argv[i]);
+				temp_argv);
 			ret++;
 			goto error_out;
 		}
 
+		strncpy_null(final_argv, path, sizeof(final_argv));
+		if (colon) {
+			strncpy_null(final_argv + strlen(final_argv), ":",
+				     PATH_MAX - strlen(final_argv));
+			strncpy_null(final_argv + strlen(final_argv), colon,
+				     PATH_MAX - strlen(final_argv));
+		}
 		memset(&ioctl_args, 0, sizeof(ioctl_args));
-		strncpy_null(ioctl_args.name, path, sizeof(ioctl_args.name));
+		strncpy_null(ioctl_args.name, final_argv, sizeof(ioctl_args.name));
 		res = ioctl(fdmnt, BTRFS_IOC_ADD_DEV, &ioctl_args);
 		if (res < 0) {
-			error("error adding device '%s': %m", path);
+			error("error adding device '%s': %m", final_argv);
 			ret++;
 		}
 		free(path);
