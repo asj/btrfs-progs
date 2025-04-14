@@ -33,6 +33,30 @@ struct extent_buffer;
 #define BTRFS_STRIPE_LEN	SZ_64K
 #define BTRFS_STRIPE_LEN_SHIFT	(16)
 
+#define BTRFS_DEVICE_ROLE_MASK	0xff
+/*
+ * device_role value and how it will be used.
+ * 	      0: Unused
+ *	   1-20: Metadata only
+ *	  21-40: Metadata preferred
+ *	  41-80: Anything|None
+ *	 81-100: Data preferred
+ *	101-128: Data only
+ * Declare some predefined easy to use device_bg_type values
+ */
+enum btrfs_device_roles {
+	BTRFS_DEVICE_ROLE_METADATA_ONLY = 20,
+	BTRFS_DEVICE_ROLE_METADATA      = 40,
+	BTRFS_DEVICE_ROLE_NONE          = 80,
+	BTRFS_DEVICE_ROLE_DATA          = 100,
+	BTRFS_DEVICE_ROLE_DATA_ONLY     = 120,
+};
+
+/* Device role value range (0 to 128) */
+#define BTRFS_DEVICE_ROLE_MAX 128
+
+int parse_device_role(char *str, enum btrfs_device_roles *role);
+
 struct btrfs_device {
 	struct list_head dev_list;
 	struct btrfs_root *dev_root;
