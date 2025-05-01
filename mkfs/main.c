@@ -1703,6 +1703,14 @@ int BOX_MAIN(mkfs)(int argc, char **argv)
 		}
 	}
 
+	/* Keep until we support metadata-only | data-only devices */
+	if (device_count != metadata_device_count ||
+	    device_count != data_device_count) {
+		error("Metadata_only and or Data_only is not yet supported");
+		ret = 1;
+		goto error;
+	}
+
 	/*
 	 * Make sure devices marked as 'metadata preferred' end up at the top,
 	 * so that, it will be our bootstrap device.
