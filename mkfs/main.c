@@ -1867,7 +1867,7 @@ int BOX_MAIN(mkfs)(int argc, char **argv)
 	}
 
 	for (i = 0; i < device_count; i++) {
-		file = argv[optind++];
+		file = path_canonicalize(argv[optind++]);
 
 		if (source_dir && path_exists(file) == 0)
 			ret = 0;
@@ -1883,7 +1883,7 @@ int BOX_MAIN(mkfs)(int argc, char **argv)
 	optind = saved_optind;
 	device_count = argc - optind;
 
-	file = argv[optind++];
+	file = path_canonicalize(argv[optind++]);
 	ssd = device_get_rotational(file);
 	if (opt_zoned) {
 		if (!zone_size(file)) {
@@ -2113,7 +2113,7 @@ int BOX_MAIN(mkfs)(int argc, char **argv)
 	for (i = saved_optind; i < saved_optind + device_count; i++) {
 		char *path;
 
-		path = argv[i];
+		path = path_canonicalize(argv[i]);
 		ret = test_minimum_size(path, min_dev_size);
 		if (ret < 0) {
 			error("failed to check size for %s: %m", path);
@@ -2177,7 +2177,8 @@ int BOX_MAIN(mkfs)(int argc, char **argv)
 	opt_oflags = O_RDWR;
 	for (i = 0; i < device_count; i++) {
 		if (opt_zoned &&
-		    zoned_model(argv[optind + i - 1]) == ZONED_HOST_MANAGED) {
+		    zoned_model(path_canonicalize(argv[optind + i - 1])) ==
+							ZONED_HOST_MANAGED) {
 			opt_oflags |= O_DIRECT;
 			break;
 		}
@@ -2185,7 +2186,7 @@ int BOX_MAIN(mkfs)(int argc, char **argv)
 
 	/* Start threads */
 	for (i = 0; i < device_count; i++) {
-		prepare_ctx[i].file = argv[optind + i - 1];
+		prepare_ctx[i].file = path_canonicalize(argv[optind + i - 1]);
 		prepare_ctx[i].byte_count = byte_count;
 		prepare_ctx[i].dev_byte_count = byte_count;
 		ret = pthread_create(&t_prepare[i], NULL, prepare_one_device,
@@ -2604,7 +2605,7 @@ out:
 		optind = saved_optind;
 		device_count = argc - optind;
 		while (device_count-- > 0) {
-			file = argv[optind++];
+			file = path_canonicalize(argv[optind++]);
 			if (path_is_block_device(file) == 1)
 				btrfs_register_one_device(file);
 		}
