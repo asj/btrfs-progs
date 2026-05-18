@@ -9575,7 +9575,8 @@ static int reset_balance(struct btrfs_trans_handle *trans)
 	struct btrfs_path path = { 0 };
 	struct extent_buffer *leaf;
 	struct btrfs_key key;
-	int del_slot, del_nr = 0;
+	int del_slot = 0;
+	int del_nr = 0;
 	int ret;
 	int found = 0;
 
